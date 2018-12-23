@@ -29,7 +29,7 @@ QString WeatherClass::getWeather(double map_lat, double map_long, string p_date)
                                        "lat=" + QString::number(map_lat) + "&lon=" + QString::number(map_long) +
                                        "&start_date=" + QString::fromStdString(convDate_start) +
                                        "&end_date=" + QString::fromStdString(convDate_end) +
-                                       "&key=f8154fc154be431ba23d2b64e46d3200")));
+                                       "&key=WEATHERBIT_KEY_HERE")));
     //simple testing response of ip: http://ip.jsontest.com/
     QNetworkReply *reply_weather = mgr_weather.get(req);
     eventLoop_weather.exec(); // blocks stack until "finished()" has been called
