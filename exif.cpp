@@ -1,22 +1,17 @@
 /**************************************************************************
   exif.cpp  -- A simple ISO C++ library to parse basic EXIF
                information from a JPEG file.
-
   Copyright (c) 2010-2015 Mayank Lahiri
   mlahiri@gmail.com
   All rights reserved (BSD License).
-
   See exif.h for version history.
-
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions are met:
-
   -- Redistributions of source code must retain the above copyright notice,
      this list of conditions and the following disclaimer.
   -- Redistributions in binary form must reproduce the above copyright notice,
      this list of conditions and the following disclaimer in the documentation
      and/or other materials provided with the distribution.
-
   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY EXPRESS
   OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
   OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN
@@ -418,23 +413,20 @@ int easyexif::EXIFInfo::parseFrom(const unsigned char *buf, unsigned len) {
   if (!buf || len < 4) return PARSE_EXIF_ERROR_NO_JPEG;
   if (buf[0] != 0xFF || buf[1] != 0xD8) return PARSE_EXIF_ERROR_NO_JPEG;
 
-  // Sanity check: some cameras pad the JPEG image with null bytes at the end.
-  // Normally, we should able to find the JPEG end marker 0xFFD9 at the end
-  // of the image, but not always. As long as there are null/0xFF bytes at the
-  // end of the image buffer, keep decrementing len until an 0xFFD9 is found,
-  // or some other bytes are. If the first non-zero/0xFF bytes from the end are
-  // not 0xFFD9, then we can be reasonably sure that the buffer is not a JPEG.
+  // Sanity check: some cameras pad the JPEG image with some bytes at the end.
+  // Normally, we should be able to find the JPEG end marker 0xFFD9 at the end
+  // of the image buffer, but not always. As long as there are some bytes
+  // except 0xD9 at the end of the image buffer, keep decrementing len until
+  // an 0xFFD9 is found. If JPEG end marker 0xFFD9 is not found,
+  // then we can be reasonably sure that the buffer is not a JPEG.
   while (len > 2) {
-    if (buf[len - 1] == 0 || buf[len - 1] == 0xFF) {
-      len--;
-    } else {
-      if (buf[len - 1] != 0xD9 || buf[len - 2] != 0xFF) {
-        return PARSE_EXIF_ERROR_NO_JPEG;
-      } else {
-        break;
-      }
-    }
+    if (buf[len - 1] == 0xD9 && buf[len - 2] == 0xFF)
+      break;
+    len--;
   }
+  if (len <= 2)
+    return PARSE_EXIF_ERROR_NO_JPEG;
+
   clear();
 
   // Scan for EXIF header (bytes 0xFF 0xE1) and do a sanity check by
@@ -608,6 +600,12 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
             this->FNumber = result.val_rational().front();
           break;
 
+      case 0x8822:
+        // Exposure Program
+        if (result.format() == 3 && result.val_short().size())
+          this->ExposureProgram = result.val_short().front();
+        break;
+
         case 0x8827:
           // ISO Speed Rating
           if (result.format() == 3 && result.val_short().size())
@@ -646,7 +644,13 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
 
         case 0x9209:
           // Flash used
-          if (result.format() == 3) this->Flash = result.data() ? 1 : 0;
+          if (result.format() == 3 && result.val_short().size()) {
+            uint16_t data = result.val_short().front();
+
+            this->Flash = data & 1;
+            this->FlashReturnedLight = (data & 6) >> 1;
+            this->FlashMode = (data & 24) >> 3;
+          }
           break;
 
         case 0x920a:
@@ -696,6 +700,13 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
             this->LensInfo.FocalPlaneYResolution = result.val_rational()[0];
           }
           break;
+
+        case 0xa210:
+            // EXIF Focal plane resolution unit
+            if (result.format() == 3 && result.val_short().size()) {
+                this->LensInfo.FocalPlaneResolutionUnit = result.val_short().front();
+            }
+            break;
 
         case 0xa405:
           // Focal length in 35mm film
@@ -860,6 +871,7 @@ void easyexif::EXIFInfo::clear() {
   BitsPerSample = 0;
   ExposureTime = 0;
   FNumber = 0;
+  ExposureProgram = 0;
   ISOSpeedRatings = 0;
   ShutterSpeedValue = 0;
   ExposureBiasValue = 0;
@@ -867,6 +879,8 @@ void easyexif::EXIFInfo::clear() {
   FocalLength = 0;
   FocalLengthIn35mm = 0;
   Flash = 0;
+  FlashReturnedLight = 0;
+  FlashMode = 0;
   MeteringMode = 0;
   ImageWidth = 0;
   ImageHeight = 0;
@@ -893,6 +907,7 @@ void easyexif::EXIFInfo::clear() {
   LensInfo.FStopMin = 0;
   LensInfo.FocalPlaneYResolution = 0;
   LensInfo.FocalPlaneXResolution = 0;
+  LensInfo.FocalPlaneResolutionUnit = 0;
   LensInfo.Make = "";
   LensInfo.Model = "";
 }
